@@ -8,6 +8,8 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env";
 import { healthRouter } from "./routes/health.routes";
+import { authRouter } from "./routes/auth.routes";
+import { adminRouter } from "./routes/admin.routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -17,6 +19,8 @@ app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
 app.use("/api/health", healthRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/admin", adminRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

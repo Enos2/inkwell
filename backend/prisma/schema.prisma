@@ -1,0 +1,482 @@
+// Location: backend/prisma/schema.prisma
+// Purpose: The complete database plan for Inkwell. Every table (model) and the
+// links between them are defined here. Money is stored as whole cents (Int) to
+// avoid rounding errors.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- ENUMS
+
+enum AdminRank {
+  SUPER_ADMIN
+  SENIOR_ADMIN
+  AD_MANAGER
+  MODERATOR
+  EDITOR
+  SUPPORT
+}
+
+enum WriterStatus {
+  NONE
+  PENDING
+  APPROVED
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum StoryKind {
+  STORY
+  ARTICLE
+}
+
+enum StoryStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+}
+
+enum ChapterStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+}
+
+enum CommentStatus {
+  VISIBLE
+  HIDDEN
+}
+
+enum ReportTargetType {
+  STORY
+  CHAPTER
+  COMMENT
+  USER
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum AdPlacement {
+  TOP_BANNER
+  SIDEBAR
+  BETWEEN_CHAPTERS
+  UNDER_POST
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum NotificationType {
+  NEW_CHAPTER
+  NEW_FOLLOWER
+  COMMENT_REPLY
+  LIKE
+  TIP
+  GIFT
+  SYSTEM
+}
+
+// ---------------------------------------------------------------- USERS
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  username     String       @unique
+  passwordHash String
+  displayName  String
+  bio          String?
+  avatarUrl    String?
+  country      String?
+  writerStatus WriterStatus @default(NONE)
+  adminRank    AdminRank?
+  status       UserStatus   @default(ACTIVE)
+  statusReason String?
+  bannedUntil  DateTime?
+  premiumUntil DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  socialLinks         SocialLink[]
+  permissionOverrides AdminPermissionOverride[]
+  logsAsActor         AdminActionLog[]          @relation("LogActor")
+  logsAsTarget        AdminActionLog[]          @relation("LogTarget")
+  stories             Story[]
+  comments            Comment[]
+  likes               Like[]
+  following           Follow[]                  @relation("Follower")
+  followers           Follow[]                  @relation("Following")
+  libraryEntries      LibraryEntry[]
+  readingProgress     ReadingProgress[]
+  notifications       Notification[]
+  reportsMade         Report[]                  @relation("ReportReporter")
+  reportsHandled      Report[]                  @relation("ReportHandler")
+  adsCreated          Ad[]
+  membershipTiers     MembershipTier[]
+  memberships         Membership[]
+  tipsSent            Tip[]                     @relation("TipSender")
+  tipsReceived        Tip[]                     @relation("TipReceiver")
+  giftsSent           GiftTransaction[]         @relation("GiftSender")
+  giftsReceived       GiftTransaction[]         @relation("GiftReceiver")
+  payments            Payment[]
+
+  @@index([adminRank])
+}
+
+model SocialLink {
+  id       String @id @default(cuid())
+  userId   String
+  platform String
+  url      String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+}
+
+// ---------------------------------------------------------------- ADMIN POWER
+
+// One row = "this specific admin is allowed / blocked from this one ability".
+model AdminPermissionOverride {
+  id         String   @id @default(cuid())
+  userId     String
+  permission String
+  allowed    Boolean
+  setById    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permission])
+}
+
+// Every admin action is recorded here so you can see who did what.
+model AdminActionLog {
+  id           String   @id @default(cuid())
+  actorId      String
+  targetUserId String?
+  action       String
+  details      Json?
+  createdAt    DateTime @default(now())
+  actor        User     @relation("LogActor", fields: [actorId], references: [id], onDelete: Restrict)
+  targetUser   User?    @relation("LogTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------- STORIES
+
+model Story {
+  id          String      @id @default(cuid())
+  authorId    String
+  kind        StoryKind   @default(STORY)
+  title       String
+  slug        String      @unique
+  synopsis    String?
+  coverUrl    String?
+  language    String      @default("en")
+  isMature    Boolean     @default(false)
+  status      StoryStatus @default(DRAFT)
+  isFeatured  Boolean     @default(false)
+  viewCount   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  publishedAt DateTime?
+
+  author          User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  chapters        Chapter[]
+  tags            Tag[]
+  comments        Comment[]
+  likes           Like[]
+  libraryEntries  LibraryEntry[]
+  readingProgress ReadingProgress[]
+  gifts           GiftTransaction[]
+
+  @@index([authorId])
+  @@index([status, publishedAt])
+}
+
+model Tag {
+  id      String  @id @default(cuid())
+  name    String  @unique
+  slug    String  @unique
+  stories Story[]
+}
+
+model Chapter {
+  id            String        @id @default(cuid())
+  storyId       String
+  number        Int
+  title         String
+  content       String        @db.Text
+  videoUrl      String?
+  status        ChapterStatus @default(DRAFT)
+  scheduledAt   DateTime?
+  publishedAt   DateTime?
+  isMembersOnly Boolean       @default(false)
+  wordCount     Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  story           Story             @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  comments        Comment[]
+  readingProgress ReadingProgress[]
+
+  @@unique([storyId, number])
+}
+
+// ---------------------------------------------------------------- SOCIAL
+
+model Comment {
+  id             String        @id @default(cuid())
+  authorId       String
+  storyId        String
+  chapterId      String?
+  parentId       String?
+  paragraphIndex Int?
+  body           String        @db.Text
+  status         CommentStatus @default(VISIBLE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  author  User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  story   Story     @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  chapter Chapter?  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+  likes   Like[]
+
+  @@index([storyId])
+  @@index([chapterId])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  storyId   String?
+  commentId String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  story   Story?   @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storyId])
+  @@unique([userId, commentId])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+}
+
+model LibraryEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  storyId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storyId])
+}
+
+model ReadingProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  storyId   String
+  chapterId String
+  position  Float    @default(0)
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  story   Story   @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storyId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  message   String
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+// ---------------------------------------------------------------- MODERATION
+
+model Report {
+  id          String           @id @default(cuid())
+  reporterId  String
+  targetType  ReportTargetType
+  targetId    String
+  reason      String
+  status      ReportStatus     @default(OPEN)
+  handledById String?
+  handledNote String?
+  createdAt   DateTime         @default(now())
+  resolvedAt  DateTime?
+
+  reporter  User  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  handledBy User? @relation("ReportHandler", fields: [handledById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+// ---------------------------------------------------------------- ADS
+
+model Ad {
+  id              String      @id @default(cuid())
+  title           String
+  imageUrl        String?
+  bodyText        String?
+  linkUrl         String
+  placement       AdPlacement
+  startsAt        DateTime
+  endsAt          DateTime
+  isActive        Boolean     @default(true)
+  targetCountries String[]
+  targetTags      String[]
+  views           Int         @default(0)
+  clicks          Int         @default(0)
+  createdById     String
+  createdAt       DateTime    @default(now())
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([placement, isActive])
+}
+
+// Simple key/value settings, for example "adsense_enabled" = "true".
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------- MONEY
+
+model MembershipTier {
+  id          String  @id @default(cuid())
+  writerId    String
+  name        String
+  description String?
+  priceCents  Int
+  currency    String  @default("USD")
+  isActive    Boolean @default(true)
+
+  writer      User         @relation(fields: [writerId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+}
+
+model Membership {
+  id           String           @id @default(cuid())
+  subscriberId String
+  tierId       String
+  status       MembershipStatus @default(ACTIVE)
+  startedAt    DateTime         @default(now())
+  endsAt       DateTime?
+
+  subscriber User           @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  tier       MembershipTier @relation(fields: [tierId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriberId, tierId])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  userId      String
+  provider    String
+  providerRef String?       @unique
+  amountCents Int
+  currency    String        @default("USD")
+  purpose     String
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Tip {
+  id               String   @id @default(cuid())
+  senderId         String
+  receiverId       String
+  amountCents      Int
+  platformFeeCents Int
+  currency         String   @default("USD")
+  message          String?
+  createdAt        DateTime @default(now())
+
+  sender   User @relation("TipSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("TipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model GiftType {
+  id         String  @id @default(cuid())
+  name       String  @unique
+  emoji      String
+  priceCents Int
+  isActive   Boolean @default(true)
+
+  transactions GiftTransaction[]
+}
+
+model GiftTransaction {
+  id               String   @id @default(cuid())
+  senderId         String
+  receiverId       String
+  giftTypeId       String
+  storyId          String?
+  quantity         Int      @default(1)
+  totalCents       Int
+  platformFeeCents Int
+  createdAt        DateTime @default(now())
+
+  sender   User     @relation("GiftSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User     @relation("GiftReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  giftType GiftType @relation(fields: [giftTypeId], references: [id], onDelete: Restrict)
+  story    Story?   @relation(fields: [storyId], references: [id], onDelete: SetNull)
+}
+
+// Location: backend/prisma/schema.prisma
+// End of file: schema.prisma
