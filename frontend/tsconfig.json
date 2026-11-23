@@ -1,3 +1,7 @@
+// Location: frontend/tsconfig.json
+// Purpose: TypeScript settings for the Inkwell website (frontend). The "@/*"
+// shortcut points to the src folder, so files can import each other like
+// "@/components/Navbar".
 {
   "compilerOptions": {
     "target": "ES2017",
@@ -13,11 +17,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
+    "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -32,3 +32,5 @@
   ],
   "exclude": ["node_modules"]
 }
+// Location: frontend/tsconfig.json
+// End of file: tsconfig.json

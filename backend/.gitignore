@@ -1,0 +1,10 @@
+# Location: backend/.gitignore
+# Purpose: Lists files that must NEVER be uploaded to GitHub: installed
+# packages, build output, and secret settings.
+
+node_modules
+dist
+.env
+
+# Location: backend/.gitignore
+# End of file: .gitignore

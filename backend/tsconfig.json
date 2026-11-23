@@ -1,0 +1,22 @@
+// Location: backend/tsconfig.json
+// Purpose: TypeScript settings for the Inkwell backend. Source files sit
+// directly in the backend folder (no src folder). Compiled output goes to the
+// "dist" folder when you run "npm run build".
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+// Location: backend/tsconfig.json
+// End of file: tsconfig.json
