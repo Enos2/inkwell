@@ -1,7 +1,8 @@
 // Location: backend/server.ts
 // Purpose: The starting point of the Inkwell backend. It creates the server,
 // allows the website to talk to it (CORS), reads JSON and cookies, connects the
-// routes, and starts listening for requests.
+// routes, and starts listening for requests. The writer-application admin
+// route is connected BEFORE the general admin route.
 
 import express from "express";
 import cors from "cors";
@@ -10,6 +11,10 @@ import { env } from "./config/env";
 import { healthRouter } from "./routes/health.routes";
 import { authRouter } from "./routes/auth.routes";
 import { adminRouter } from "./routes/admin.routes";
+import { writerRouter } from "./routes/writer.routes";
+import { adminWritersRouter } from "./routes/adminWriters.routes";
+import { storyRouter, tagRouter } from "./routes/story.routes";
+import { chapterRouter } from "./routes/chapter.routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -20,7 +25,12 @@ app.use(cookieParser());
 
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/writer", writerRouter);
+app.use("/api/admin/writers", adminWritersRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/stories", storyRouter);
+app.use("/api/tags", tagRouter);
+app.use("/api/chapters", chapterRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
