@@ -15,6 +15,12 @@ import { writerRouter } from "./routes/writer.routes";
 import { adminWritersRouter } from "./routes/adminWriters.routes";
 import { storyRouter, tagRouter } from "./routes/story.routes";
 import { chapterRouter } from "./routes/chapter.routes";
+import { libraryRouter } from "./routes/library.routes";
+import { progressRouter } from "./routes/progress.routes";
+import { likeRouter } from "./routes/like.routes";
+import { commentRouter } from "./routes/comment.routes";
+import { followRouter, feedRouter } from "./routes/follow.routes";
+import { notificationRouter } from "./routes/notification.routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -31,6 +37,13 @@ app.use("/api/admin", adminRouter);
 app.use("/api/stories", storyRouter);
 app.use("/api/tags", tagRouter);
 app.use("/api/chapters", chapterRouter);
+app.use("/api/library", libraryRouter);
+app.use("/api/progress", progressRouter);
+app.use("/api/likes", likeRouter);
+app.use("/api/comments", commentRouter);
+app.use("/api/follows", followRouter);
+app.use("/api/feed", feedRouter);
+app.use("/api/notifications", notificationRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

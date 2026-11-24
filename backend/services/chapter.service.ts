@@ -3,7 +3,8 @@
 // chapter (writers only, on their own stories) and reading a chapter. Reading
 // checks that the story is visible, that members-only chapters are only shown
 // to members, adds to the story's view count, and returns the previous and next
-// chapters. Chapter numbers are given automatically (1, 2, 3 ...).
+// chapters. Chapter numbers are given automatically (1, 2, 3 ...). When a
+// chapter goes live in a published story, the writer's followers are notified.
 
 import { Prisma } from "@prisma/client";
 import type { ChapterStatus } from "@prisma/client";
@@ -15,6 +16,7 @@ import type {
   CreateChapterInput,
   UpdateChapterInput,
 } from "../validators/chapter.validator";
+import { notifyFollowersOfChapter } from "./notification.service";
 import {
   assertCanView,
   findOwnedStory,
@@ -98,7 +100,7 @@ export async function createChapter(
   storyId: string,
   input: CreateChapterInput
 ) {
-  await findOwnedStory(user, storyId);
+  const story = await findOwnedStory(user, storyId);
 
   const fields = resolvePublishFields(
     input.status,
@@ -112,8 +114,9 @@ export async function createChapter(
   });
   const number = (last._max.number ?? 0) + 1;
 
+  let chapter: ChapterRow;
   try {
-    const chapter = await prisma.chapter.create({
+    chapter = await prisma.chapter.create({
       data: {
         storyId,
         number,
@@ -128,7 +131,6 @@ export async function createChapter(
       },
       select: chapterSelect,
     });
-    return withEmbed(chapter);
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -141,6 +143,16 @@ export async function createChapter(
     }
     throw error;
   }
+
+  if (chapter.status === "PUBLISHED" && story.status === "PUBLISHED") {
+    await notifyFollowersOfChapter({
+      authorId: user.id,
+      story: { title: story.title, slug: story.slug },
+      chapter: { number: chapter.number, title: chapter.title },
+    });
+  }
+
+  return withEmbed(chapter);
 }
 
 async function findOwnedChapter(user: AuthUser, chapterId: string) {
@@ -152,7 +164,9 @@ async function findOwnedChapter(user: AuthUser, chapterId: string) {
       status: true,
       scheduledAt: true,
       publishedAt: true,
-      story: { select: { authorId: true } },
+      story: {
+        select: { authorId: true, title: true, slug: true, status: true },
+      },
     },
   });
   if (!chapter) throw new AppError("Chapter not found", 404);
@@ -199,6 +213,16 @@ export async function updateChapter(
     data,
     select: chapterSelect,
   });
+
+  const justWentLive =
+    chapter.status !== "PUBLISHED" && updated.status === "PUBLISHED";
+  if (justWentLive && chapter.story.status === "PUBLISHED") {
+    await notifyFollowersOfChapter({
+      authorId: user.id,
+      story: { title: chapter.story.title, slug: chapter.story.slug },
+      chapter: { number: updated.number, title: updated.title },
+    });
+  }
 
   await demoteStoryIfEmpty(chapter.storyId);
   return withEmbed(updated);
