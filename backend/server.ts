@@ -21,6 +21,9 @@ import { likeRouter } from "./routes/like.routes";
 import { commentRouter } from "./routes/comment.routes";
 import { followRouter, feedRouter } from "./routes/follow.routes";
 import { notificationRouter } from "./routes/notification.routes";
+import { profileRouter } from "./routes/profile.routes";
+import { messageRouter } from "./routes/message.routes";
+import { blockRouter } from "./routes/block.routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -44,6 +47,9 @@ app.use("/api/comments", commentRouter);
 app.use("/api/follows", followRouter);
 app.use("/api/feed", feedRouter);
 app.use("/api/notifications", notificationRouter);
+app.use("/api/users", profileRouter);
+app.use("/api/messages", messageRouter);
+app.use("/api/blocks", blockRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
