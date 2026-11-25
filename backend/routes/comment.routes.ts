@@ -1,6 +1,8 @@
+// Project: Inkwell
 // Location: backend/routes/comment.routes.ts
 // Purpose: The comment addresses under /api/comments. Anyone can read comments
-// of stories they can see. Logged-in users can write, edit and delete their own
+// of stories they can see (comments on stories of banned or suspended writers
+// look "not found"). Logged-in users can write, edit and delete their own
 // comments. Admins with the HIDE_COMMENTS ability can hide or restore a comment.
 
 import { Router } from "express";
@@ -14,6 +16,10 @@ import {
   getOptionalUser,
   optionalAuthenticate,
 } from "../middleware/optionalAuth";
+import {
+  hideIfAuthorBlockedByCommentId,
+  hideIfAuthorBlockedByStoryQuery,
+} from "../middleware/storyVisibility";
 import {
   createComment,
   deleteComment,
@@ -37,6 +43,7 @@ export const commentRouter = Router();
 commentRouter.get(
   "/",
   optionalAuthenticate,
+  hideIfAuthorBlockedByStoryQuery,
   asyncHandler(async (req, res) => {
     const query = listCommentsQuerySchema.parse(req.query);
     res.json(await listComments(query, getOptionalUser(res)));
@@ -47,6 +54,7 @@ commentRouter.get(
 commentRouter.get(
   "/:commentId/replies",
   optionalAuthenticate,
+  hideIfAuthorBlockedByCommentId,
   asyncHandler(async (req, res) => {
     const { commentId } = commentIdParamSchema.parse(req.params);
     const { page, limit } = pageQuerySchema.parse(req.query);

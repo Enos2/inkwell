@@ -1,0 +1,34 @@
+# Project: Inkwell
+# Location: .gitignore (project root, next to the backend and frontend folders)
+# Purpose: Lists files that must NEVER be uploaded to GitHub: secret settings
+# (.env files), installed packages, build output, logs and editor or computer
+# clutter. The safe template ".env.example" IS allowed, so other people can see
+# which settings the project needs.
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Installed packages
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Computer and editor clutter
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Location: .gitignore (project root)
+# End of file: .gitignore

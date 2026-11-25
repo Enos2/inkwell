@@ -1,14 +1,17 @@
+// Project: Inkwell
 // Location: backend/services/storyAccess.service.ts
 // Purpose: Small shared helpers used by the story, chapter and social
 // services: who may write, who may see a hidden or draft story, whether a
 // reader has an active membership, whether a reader may open a chapter,
-// finding a published story, finding a story that belongs to the logged-in
-// writer, and publishing scheduled chapters whose time has come.
+// finding a published story (not when its writer is banned or suspended),
+// finding a story that belongs to the logged-in writer, and publishing
+// scheduled chapters whose time has come.
 
 import { prisma } from "../config/prisma";
 import { AppError } from "../utils/errors";
 import type { AuthUser } from "../utils/selects";
 import { notifyFollowersOfChapter } from "./notification.service";
+import { isAccountBlocked } from "./session.service";
 
 // Approved writers can write. The Super Admin can always write.
 export function canWrite(user: AuthUser): boolean {
@@ -83,16 +86,31 @@ export async function assertCanAccessChapter(
   }
 }
 
-// Finds a story that is live. Used for likes and the library.
+// Finds a story that is live. Used for likes and the library. A story whose
+// writer is banned or suspended counts as not found.
 export async function findPublishedStory(storyId: string) {
   const story = await prisma.story.findUnique({
     where: { id: storyId },
-    select: { id: true, title: true, slug: true, authorId: true, status: true },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      authorId: true,
+      status: true,
+      author: { select: { status: true, bannedUntil: true } },
+    },
   });
-  if (!story || story.status !== "PUBLISHED") {
+  if (
+    !story ||
+    story.status !== "PUBLISHED" ||
+    isAccountBlocked(story.author)
+  ) {
     throw new AppError("Story not found", 404);
   }
-  return story;
+
+  const { author, ...details } = story;
+  void author;
+  return details;
 }
 
 // Finds a story and makes sure it belongs to this writer.

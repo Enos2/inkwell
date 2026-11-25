@@ -1,15 +1,19 @@
+// Project: Inkwell
 // Location: backend/server.ts
 // Purpose: The starting point of the Inkwell backend. It creates the server,
-// allows the website to talk to it (CORS), reads JSON and cookies (and keeps
-// the exact raw bytes of each request, which payment webhooks need for their
-// signature check), connects the routes, and starts listening. The specific
-// admin routes are connected BEFORE the general admin route. It also, at
-// startup and every 10 minutes, lifts expired suspensions and marks expired
-// memberships.
+// adds security headers (helmet), allows the website to talk to it (CORS),
+// reads JSON and cookies (and keeps the exact raw bytes of each request, which
+// payment webhooks need for their signature check), applies the rate limits,
+// connects the routes, and starts listening. The health check and the payment
+// webhook are connected BEFORE the rate limit, so they are never blocked. The
+// specific admin routes are connected BEFORE the general admin route. Every 10
+// minutes it lifts expired suspensions and marks expired memberships. Fatal
+// unexpected errors are logged.
 
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import { env } from "./config/env";
 import { healthRouter } from "./routes/health.routes";
 import { authRouter } from "./routes/auth.routes";
@@ -37,12 +41,25 @@ import { paymentRouter } from "./routes/payment.routes";
 import { webhookRouter } from "./routes/webhook.routes";
 import { membershipRouter } from "./routes/membership.routes";
 import { walletRouter } from "./routes/wallet.routes";
+import {
+  apiLimiter,
+  loginLimiter,
+  registerLimiter,
+} from "./middleware/rateLimit";
 import { liftExpiredSuspensions } from "./services/moderation.service";
 import { expireMemberships } from "./services/catalog.service";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 const app = express();
 
+// Behind a hosting provider, the visitor's real address arrives in a header
+// added by the host's proxy. Check how many proxies your host uses (1 is
+// typical) when you deploy.
+if (env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
 app.use(
   express.json({
@@ -54,7 +71,15 @@ app.use(
 );
 app.use(cookieParser());
 
+// These two are never rate limited: uptime checks, and Paystack's own servers.
 app.use("/api/health", healthRouter);
+app.use("/api/webhooks", webhookRouter);
+
+// Everything below is rate limited.
+app.use("/api", apiLimiter);
+app.use("/api/auth/login", loginLimiter);
+app.use("/api/auth/register", registerLimiter);
+
 app.use("/api/auth", authRouter);
 app.use("/api/writer", writerRouter);
 app.use("/api/admin/writers", adminWritersRouter);
@@ -79,7 +104,6 @@ app.use("/api/users", profileRouter);
 app.use("/api/messages", messageRouter);
 app.use("/api/blocks", blockRouter);
 app.use("/api/payments", paymentRouter);
-app.use("/api/webhooks", webhookRouter);
 app.use("/api/memberships", membershipRouter);
 app.use("/api/wallet", walletRouter);
 
@@ -106,6 +130,18 @@ async function runSweeps(): Promise<void> {
     console.error("Could not expire memberships", error);
   }
 }
+
+// A forgotten error inside a promise is logged and the server keeps running.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection", reason);
+});
+
+// A truly unexpected crash leaves the server in an unknown state, so it is
+// logged and the program stops. A host restarts it automatically.
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception, shutting down", error);
+  process.exit(1);
+});
 
 app.listen(env.PORT, () => {
   console.log(`Inkwell backend running at http://localhost:${env.PORT}`);

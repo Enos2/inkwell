@@ -1,8 +1,10 @@
+// Project: Inkwell
 // Location: backend/routes/story.routes.ts
 // Purpose: The story addresses under /api/stories and /api/tags. Anyone can
-// browse and read published stories. Writers create and manage their own
-// stories and add chapters. The address "/mine" is placed before "/:slug" so it
-// is not mistaken for a story name.
+// browse and read published stories (stories of banned or suspended writers
+// look "not found"). Writers create and manage their own stories and add
+// chapters. The address "/mine" is placed before "/:slug" so it is not
+// mistaken for a story name.
 
 import { Router } from "express";
 import {
@@ -35,6 +37,7 @@ import {
   getOptionalUser,
   optionalAuthenticate,
 } from "../middleware/optionalAuth";
+import { hideIfAuthorBlockedBySlug } from "../middleware/storyVisibility";
 import { asyncHandler } from "../utils/asyncHandler";
 
 export const storyRouter = Router();
@@ -70,6 +73,7 @@ storyRouter.get(
 storyRouter.get(
   "/:slug",
   optionalAuthenticate,
+  hideIfAuthorBlockedBySlug,
   asyncHandler(async (req, res) => {
     const { slug } = slugParamSchema.parse(req.params);
     res.json(await getStoryBySlug(slug, getOptionalUser(res)));
@@ -80,6 +84,7 @@ storyRouter.get(
 storyRouter.get(
   "/:slug/chapters/:number",
   optionalAuthenticate,
+  hideIfAuthorBlockedBySlug,
   asyncHandler(async (req, res) => {
     const { slug, number } = chapterReadParamsSchema.parse(req.params);
     res.json(await getChapterForReading(slug, number, getOptionalUser(res)));
