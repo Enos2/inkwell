@@ -1,9 +1,11 @@
 // Location: backend/server.ts
 // Purpose: The starting point of the Inkwell backend. It creates the server,
-// allows the website to talk to it (CORS), reads JSON and cookies, connects the
-// routes, and starts listening for requests. The specific admin routes
-// (writers, ads, moderation) are connected BEFORE the general admin route. It
-// also lifts expired suspensions at startup and every 10 minutes.
+// allows the website to talk to it (CORS), reads JSON and cookies (and keeps
+// the exact raw bytes of each request, which payment webhooks need for their
+// signature check), connects the routes, and starts listening. The specific
+// admin routes are connected BEFORE the general admin route. It also, at
+// startup and every 10 minutes, lifts expired suspensions and marks expired
+// memberships.
 
 import express from "express";
 import cors from "cors";
@@ -16,6 +18,7 @@ import { writerRouter } from "./routes/writer.routes";
 import { adminWritersRouter } from "./routes/adminWriters.routes";
 import { adminAdsRouter } from "./routes/adminAds.routes";
 import { adminModerationRouter } from "./routes/adminModeration.routes";
+import { adminPaymentsRouter } from "./routes/adminPayments.routes";
 import { adRouter } from "./routes/ad.routes";
 import { reportRouter } from "./routes/report.routes";
 import { featuredRouter } from "./routes/featured.routes";
@@ -30,13 +33,25 @@ import { notificationRouter } from "./routes/notification.routes";
 import { profileRouter } from "./routes/profile.routes";
 import { messageRouter } from "./routes/message.routes";
 import { blockRouter } from "./routes/block.routes";
+import { paymentRouter } from "./routes/payment.routes";
+import { webhookRouter } from "./routes/webhook.routes";
+import { membershipRouter } from "./routes/membership.routes";
+import { walletRouter } from "./routes/wallet.routes";
 import { liftExpiredSuspensions } from "./services/moderation.service";
+import { expireMemberships } from "./services/catalog.service";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 const app = express();
 
 app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
-app.use(express.json({ limit: "1mb" }));
+app.use(
+  express.json({
+    limit: "1mb",
+    verify: (req, _res, buffer) => {
+      (req as unknown as { rawBody?: Buffer }).rawBody = buffer;
+    },
+  })
+);
 app.use(cookieParser());
 
 app.use("/api/health", healthRouter);
@@ -45,6 +60,7 @@ app.use("/api/writer", writerRouter);
 app.use("/api/admin/writers", adminWritersRouter);
 app.use("/api/admin/ads", adminAdsRouter);
 app.use("/api/admin/moderation", adminModerationRouter);
+app.use("/api/admin/payments", adminPaymentsRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/ads", adRouter);
 app.use("/api/reports", reportRouter);
@@ -62,12 +78,16 @@ app.use("/api/notifications", notificationRouter);
 app.use("/api/users", profileRouter);
 app.use("/api/messages", messageRouter);
 app.use("/api/blocks", blockRouter);
+app.use("/api/payments", paymentRouter);
+app.use("/api/webhooks", webhookRouter);
+app.use("/api/memberships", membershipRouter);
+app.use("/api/wallet", walletRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
 
 // A failed sweep must never crash the server, so errors are only logged.
-async function sweepSuspensions(): Promise<void> {
+async function runSweeps(): Promise<void> {
   try {
     const lifted = await liftExpiredSuspensions();
     if (lifted > 0) {
@@ -76,13 +96,27 @@ async function sweepSuspensions(): Promise<void> {
   } catch (error) {
     console.error("Could not lift expired suspensions", error);
   }
+
+  try {
+    const expired = await expireMemberships();
+    if (expired > 0) {
+      console.log(`Marked ${expired} membership(s) as expired`);
+    }
+  } catch (error) {
+    console.error("Could not expire memberships", error);
+  }
 }
 
 app.listen(env.PORT, () => {
   console.log(`Inkwell backend running at http://localhost:${env.PORT}`);
-  void sweepSuspensions();
+  if (env.PAYMENTS_SANDBOX) {
+    console.log(
+      "WARNING: payments are in SANDBOX mode (fake payments, local testing only)"
+    );
+  }
+  void runSweeps();
   setInterval(() => {
-    void sweepSuspensions();
+    void runSweeps();
   }, 10 * 60 * 1000);
 });
 

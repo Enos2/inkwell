@@ -1,7 +1,10 @@
 // Location: backend/config/env.ts
 // Purpose: Reads the settings from the .env file in one place and checks that
 // the important ones are filled in. If one is missing, the server refuses to
-// start and tells you which one.
+// start and tells you which one. Payment settings are optional: without a
+// Paystack key, payments simply say "not set up yet". PAYMENTS_SANDBOX lets you
+// test payments locally with no payment account, and it is ALWAYS switched off
+// when NODE_ENV is "production".
 
 import dotenv from "dotenv";
 
@@ -17,18 +20,31 @@ function required(name: string): string {
   return value.trim();
 }
 
+function optional(name: string): string | null {
+  const value = process.env[name];
+  if (!value || value.trim() === "" || value.startsWith("PASTE_")) {
+    return null;
+  }
+  return value.trim();
+}
+
 const jwtSecret = required("JWT_SECRET");
 if (jwtSecret.length < 32) {
   throw new Error("JWT_SECRET must be at least 32 characters long.");
 }
 
+const nodeEnv = process.env.NODE_ENV ?? "development";
+
 export const env = {
-  NODE_ENV: process.env.NODE_ENV ?? "development",
+  NODE_ENV: nodeEnv,
   PORT: Number(process.env.PORT ?? 4000),
   FRONTEND_URL: process.env.FRONTEND_URL ?? "http://localhost:3000",
   DATABASE_URL: required("DATABASE_URL"),
   JWT_SECRET: jwtSecret,
   SUPER_ADMIN_EMAIL: required("SUPER_ADMIN_EMAIL").toLowerCase(),
+  PAYSTACK_SECRET_KEY: optional("PAYSTACK_SECRET_KEY"),
+  PAYMENTS_SANDBOX:
+    optional("PAYMENTS_SANDBOX") === "true" && nodeEnv !== "production",
 };
 
 // Location: backend/config/env.ts
