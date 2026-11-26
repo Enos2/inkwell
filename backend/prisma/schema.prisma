@@ -1,9 +1,11 @@
+// Project: Inkwell
 // Location: backend/prisma/schema.prisma
 // Purpose: The complete database plan for Inkwell. Every table (model) and the
 // links between them are defined here. Money is stored as whole cents (Int) to
-// avoid rounding errors. This version adds the money system: richer payments
-// (Payment), the writer wallet (LedgerEntry) and payout requests
-// (PayoutRequest). All earnings are recorded in US dollar cents.
+// avoid rounding errors. This version adds series, co-authors, unique story
+// views, reading days (streaks), badges, writing challenges, email tokens
+// (password reset and verification), a token version (log out everywhere) and
+// reader settings.
 
 generator client {
   provider = "prisma-client-js"
@@ -116,41 +118,61 @@ enum PayoutStatus {
   REJECTED
 }
 
+enum EmailTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+enum CollaboratorStatus {
+  PENDING
+  ACCEPTED
+}
+
 // ---------------------------------------------------------------- USERS
 
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  username     String       @unique
-  passwordHash String
-  displayName  String
-  bio          String?
-  avatarUrl    String?
-  country      String?
-  writerStatus WriterStatus @default(NONE)
-  adminRank    AdminRank?
-  status       UserStatus   @default(ACTIVE)
-  statusReason String?
-  bannedUntil  DateTime?
-  premiumUntil DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id              String       @id @default(cuid())
+  email           String       @unique
+  username        String       @unique
+  passwordHash    String
+  displayName     String
+  bio             String?
+  avatarUrl       String?
+  country         String?
+  writerStatus    WriterStatus @default(NONE)
+  adminRank       AdminRank?
+  status          UserStatus   @default(ACTIVE)
+  statusReason    String?
+  bannedUntil     DateTime?
+  premiumUntil    DateTime?
+  tokenVersion    Int          @default(0)
+  emailVerifiedAt DateTime?
+  readerPrefs     Json?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   socialLinks         SocialLink[]
   permissionOverrides AdminPermissionOverride[]
   logsAsActor         AdminActionLog[]          @relation("LogActor")
   logsAsTarget        AdminActionLog[]          @relation("LogTarget")
   stories             Story[]
+  series              Series[]
+  collaborations      StoryCollaborator[]       @relation("CollaboratorUser")
+  invitationsSent     StoryCollaborator[]       @relation("CollaboratorInviter")
   comments            Comment[]
   likes               Like[]
   following           Follow[]                  @relation("Follower")
   followers           Follow[]                  @relation("Following")
   libraryEntries      LibraryEntry[]
   readingProgress     ReadingProgress[]
+  readingDays         ReadingDay[]
+  badges              UserBadge[]
+  emailTokens         EmailToken[]
   notifications       Notification[]
   reportsMade         Report[]                  @relation("ReportReporter")
   reportsHandled      Report[]                  @relation("ReportHandler")
   adsCreated          Ad[]
+  challengesCreated   Challenge[]               @relation("ChallengeCreator")
   membershipTiers     MembershipTier[]
   memberships         Membership[]
   tipsSent            Tip[]                     @relation("TipSender")
@@ -178,6 +200,21 @@ model SocialLink {
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, platform])
+}
+
+// A one-time token sent by email, for resetting a password or verifying an
+// email address. Only a hash of the token is stored, never the token itself.
+model EmailToken {
+  id        String         @id @default(cuid())
+  userId    String
+  type      EmailTokenType
+  tokenHash String         @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime       @default(now())
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
 }
 
 // ---------------------------------------------------------------- ADMIN POWER
@@ -226,21 +263,77 @@ model Story {
   status      StoryStatus @default(DRAFT)
   isFeatured  Boolean     @default(false)
   viewCount   Int         @default(0)
+  seriesId    String?
+  seriesOrder Int?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   publishedAt DateTime?
 
-  author          User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  chapters        Chapter[]
-  tags            Tag[]
-  comments        Comment[]
-  likes           Like[]
-  libraryEntries  LibraryEntry[]
-  readingProgress ReadingProgress[]
-  gifts           GiftTransaction[]
+  author           User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  series           Series?             @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  chapters         Chapter[]
+  tags             Tag[]
+  comments         Comment[]
+  likes            Like[]
+  libraryEntries   LibraryEntry[]
+  readingProgress  ReadingProgress[]
+  gifts            GiftTransaction[]
+  collaborators    StoryCollaborator[]
+  views            StoryView[]
+  challengeEntries ChallengeEntry[]
 
   @@index([authorId])
   @@index([status, publishedAt])
+  @@index([seriesId, seriesOrder])
+}
+
+// A group of stories that belong together (for example Book 1, Book 2).
+model Series {
+  id          String   @id @default(cuid())
+  authorId    String
+  title       String
+  slug        String   @unique
+  description String?
+  coverUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  stories Story[]
+
+  @@index([authorId])
+}
+
+// A second writer invited to work on someone else's story.
+model StoryCollaborator {
+  id          String             @id @default(cuid())
+  storyId     String
+  userId      String
+  invitedById String
+  status      CollaboratorStatus @default(PENDING)
+  createdAt   DateTime           @default(now())
+
+  story     Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user      User  @relation("CollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User  @relation("CollaboratorInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, userId])
+  @@index([userId, status])
+}
+
+// One row per story, per reader (or visitor), per day: counts each reader once
+// a day. viewerKey is a user id or a scrambled (hashed) visitor address.
+model StoryView {
+  id        String   @id @default(cuid())
+  storyId   String
+  viewerKey String
+  day       DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, viewerKey, day])
+  @@index([storyId, day])
 }
 
 model Tag {
@@ -351,6 +444,30 @@ model ReadingProgress {
   @@unique([userId, storyId])
 }
 
+// One row per reader per day they read something. Reading streaks are worked
+// out from these rows.
+model ReadingDay {
+  id     String   @id @default(cuid())
+  userId String
+  day    DateTime @db.Date
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+}
+
+// A badge a person has earned. The badge list itself lives in the code.
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  awardedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, code])
+}
+
 model Notification {
   id        String           @id @default(cuid())
   userId    String
@@ -363,6 +480,38 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
+}
+
+// ---------------------------------------------------------------- CHALLENGES
+
+// A writing challenge run by Inkwell, for example "Write a story in 7 days".
+model Challenge {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  prompt      String   @db.Text
+  startsAt    DateTime
+  endsAt      DateTime
+  createdById String
+  createdAt   DateTime @default(now())
+
+  createdBy User             @relation("ChallengeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  entries   ChallengeEntry[]
+
+  @@index([startsAt, endsAt])
+}
+
+model ChallengeEntry {
+  id          String   @id @default(cuid())
+  challengeId String
+  storyId     String
+  isWinner    Boolean  @default(false)
+  submittedAt DateTime @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  story     Story     @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, storyId])
 }
 
 // ---------------------------------------------------------------- MESSAGING

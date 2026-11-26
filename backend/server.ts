@@ -41,6 +41,9 @@ import { paymentRouter } from "./routes/payment.routes";
 import { webhookRouter } from "./routes/webhook.routes";
 import { membershipRouter } from "./routes/membership.routes";
 import { walletRouter } from "./routes/wallet.routes";
+import { searchRouter, discoverRouter } from "./routes/discovery.routes";
+import { seriesRouter } from "./routes/series.routes";
+import { engagementRouter } from "./routes/engagement.routes";
 import {
   apiLimiter,
   loginLimiter,
@@ -106,6 +109,10 @@ app.use("/api/blocks", blockRouter);
 app.use("/api/payments", paymentRouter);
 app.use("/api/memberships", membershipRouter);
 app.use("/api/wallet", walletRouter);
+app.use("/api/search", searchRouter);
+app.use("/api/discover", discoverRouter);
+app.use("/api/series", seriesRouter);
+app.use("/api/engagement", engagementRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

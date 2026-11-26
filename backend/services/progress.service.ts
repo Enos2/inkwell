@@ -1,13 +1,16 @@
+// Project: Inkwell
 // Location: backend/services/progress.service.ts
 // Purpose: Remembers where each reader stopped. One saved spot per story (the
 // chapter and how far down it). Also gives the "continue reading" list and the
 // saved spot for one story. Progress can only be saved for a chapter the
-// person is allowed to read.
+// person is allowed to read. Saving progress also counts today as a reading day
+// for streaks and badges.
 
 import { prisma } from "../config/prisma";
 import { AppError } from "../utils/errors";
 import type { AuthUser } from "../utils/selects";
 import type { SaveProgressInput } from "../validators/social.validator";
+import { recordReadingActivity } from "./engagement.service";
 import { assertCanAccessChapter, assertCanView } from "./storyAccess.service";
 
 const progressSelect = {
@@ -49,6 +52,12 @@ export async function saveProgress(user: AuthUser, input: SaveProgressInput) {
     },
     update: { chapterId: input.chapterId, position: input.position },
     select: progressSelect,
+  });
+
+  // Count today as a reading day. A problem here must never stop the progress
+  // from being saved, so it is only logged.
+  recordReadingActivity(user.id).catch((error: unknown) => {
+    console.error("Could not record reading activity", error);
   });
 
   return { progress };

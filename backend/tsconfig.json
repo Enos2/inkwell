@@ -1,22 +1,26 @@
+// Project: Inkwell
 // Location: backend/tsconfig.json
 // Purpose: TypeScript settings for the Inkwell backend. Source files sit
 // directly in the backend folder (no src folder). Compiled output goes to the
-// "dist" folder when you run "npm run build".
+// "dist" folder when you run "npm run build". The tests folder is not part of
+// the build. "node16" is used because the newest TypeScript no longer accepts
+// the old "node" module setting.
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "Node16",
-    "moduleResolution": "Node16",
+    "module": "node16",
+    "moduleResolution": "node16",
     "outDir": "dist",
     "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["node"]
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "tests"]
 }
 // Location: backend/tsconfig.json
 // End of file: tsconfig.json
