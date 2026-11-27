@@ -1,7 +1,10 @@
+// Project: Inkwell
 // Location: backend/services/auth.service.ts
 // Purpose: The real work of registering and logging in. Passwords are scrambled
 // with bcrypt before saving. The person whose email matches SUPER_ADMIN_EMAIL
-// becomes the Super Admin, but only if no Super Admin exists yet.
+// becomes the Super Admin, but only if no Super Admin exists yet. A new account
+// is sent a verification email. The login token carries the account's token
+// version, so "log out everywhere" can cancel old logins.
 
 import bcrypt from "bcryptjs";
 import type { AdminRank } from "@prisma/client";
@@ -13,6 +16,7 @@ import type {
   LoginInput,
   RegisterInput,
 } from "../validators/auth.validator";
+import { startEmailVerification } from "./account.service";
 import { isAccountBlocked } from "./session.service";
 import { signToken } from "./token.service";
 
@@ -56,7 +60,14 @@ export async function registerUser(input: RegisterInput) {
     select: selfUserSelect,
   });
 
-  const token = signToken(user.id);
+  // Registration must work even if the email cannot be sent, so a problem here
+  // is only logged.
+  startEmailVerification(user.id, user.email).catch((error: unknown) => {
+    console.error("Could not start email verification", error);
+  });
+
+  // A brand new account always starts at token version 0.
+  const token = signToken(user.id, 0);
   return { user, token };
 }
 
@@ -91,7 +102,7 @@ export async function loginUser(input: LoginInput) {
     throw new AppError("Incorrect email or password", 401);
   }
 
-  const token = signToken(user.id);
+  const token = signToken(user.id, account.tokenVersion);
   return { user, token };
 }
 

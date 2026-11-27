@@ -1,8 +1,10 @@
+// Project: Inkwell
 // Location: backend/services/session.service.ts
 // Purpose: Works out WHO is making a request. It accepts a token from the
 // "Authorization: Bearer ..." header (used by a future mobile app) or from the
-// browser cookie (used by the website). It also sets and clears the cookie and
-// checks whether an account is banned or suspended.
+// browser cookie (used by the website). It checks the token version (so "log
+// out everywhere" works), sets and clears the cookie, and checks whether an
+// account is banned or suspended.
 
 import type { Request, Response } from "express";
 import type { CookieOptions } from "express";
@@ -50,14 +52,17 @@ export async function getCurrentUser(req: Request) {
   const token = readToken(req);
   if (!token) return null;
 
-  const userId = verifyToken(token);
-  if (!userId) return null;
+  const verified = verifyToken(token);
+  if (!verified) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: selfUserSelect,
+  const row = await prisma.user.findUnique({
+    where: { id: verified.userId },
+    select: { ...selfUserSelect, tokenVersion: true },
   });
-  if (!user) return null;
+  if (!row || row.tokenVersion !== verified.tokenVersion) return null;
+
+  const { tokenVersion, ...user } = row;
+  void tokenVersion;
   if (isAccountBlocked(user)) return null;
 
   return user;

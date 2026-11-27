@@ -1,10 +1,12 @@
+// Project: Inkwell
 // Location: backend/config/env.ts
 // Purpose: Reads the settings from the .env file in one place and checks that
 // the important ones are filled in. If one is missing, the server refuses to
-// start and tells you which one. Payment settings are optional: without a
-// Paystack key, payments simply say "not set up yet". PAYMENTS_SANDBOX lets you
-// test payments locally with no payment account, and it is ALWAYS switched off
-// when NODE_ENV is "production".
+// start and tells you which one. Payment and email settings are optional:
+// without a Paystack key, payments say "not set up yet", and without a Resend
+// key, emails are only printed in the terminal while you develop.
+// PAYMENTS_SANDBOX lets you test payments locally with no payment account, and
+// it is ALWAYS switched off when NODE_ENV is "production".
 
 import dotenv from "dotenv";
 
@@ -45,6 +47,8 @@ export const env = {
   PAYSTACK_SECRET_KEY: optional("PAYSTACK_SECRET_KEY"),
   PAYMENTS_SANDBOX:
     optional("PAYMENTS_SANDBOX") === "true" && nodeEnv !== "production",
+  RESEND_API_KEY: optional("RESEND_API_KEY"),
+  MAIL_FROM: optional("MAIL_FROM") ?? "Inkwell <onboarding@resend.dev>",
 };
 
 // Location: backend/config/env.ts

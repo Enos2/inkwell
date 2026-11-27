@@ -1,3 +1,4 @@
+// Project: Inkwell
 // Location: backend/utils/selects.ts
 // Purpose: Lists which user fields are safe to send back to the person
 // themselves. The password hash is deliberately NOT in this list, so it can
@@ -18,6 +19,7 @@ export const selfUserSelect = {
   status: true,
   bannedUntil: true,
   premiumUntil: true,
+  emailVerifiedAt: true,
   createdAt: true,
 } as const satisfies Prisma.UserSelect;
 

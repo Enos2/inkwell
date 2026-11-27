@@ -1,3 +1,4 @@
+// Project: Inkwell
 // Location: backend/config/permissions.ts
 // Purpose: The list of every ability an admin can have, and which abilities each
 // admin rank gets by default. The Super Admin can then switch single abilities
@@ -21,6 +22,7 @@ export const PERMISSION_LIST = [
   "MANAGE_ADS",
   "TOGGLE_ADSENSE",
   "VIEW_ACTIVITY_LOG",
+  "MANAGE_CHALLENGES",
 ] as const;
 
 export type Permission = (typeof PERMISSION_LIST)[number];
@@ -39,6 +41,7 @@ export const PERMISSION_DESCRIPTIONS: Record<Permission, string> = {
   MANAGE_ADS: "Create, edit and remove ads",
   TOGGLE_ADSENSE: "Turn Google AdSense on or off",
   VIEW_ACTIVITY_LOG: "See the admin activity log",
+  MANAGE_CHALLENGES: "Create writing challenges and pick winners",
 };
 
 // The ranks the Super Admin is allowed to hand out. SUPER_ADMIN is not here:
@@ -65,6 +68,7 @@ export const RANK_DEFAULTS: Record<AdminRank, readonly Permission[]> = {
     "VIEW_REPORTS",
     "RESOLVE_REPORTS",
     "VIEW_ACTIVITY_LOG",
+    "MANAGE_CHALLENGES",
   ],
   AD_MANAGER: ["VIEW_ADMIN_PANEL", "MANAGE_ADS", "TOGGLE_ADSENSE"],
   MODERATOR: [
@@ -76,7 +80,12 @@ export const RANK_DEFAULTS: Record<AdminRank, readonly Permission[]> = {
     "VIEW_REPORTS",
     "RESOLVE_REPORTS",
   ],
-  EDITOR: ["VIEW_ADMIN_PANEL", "FEATURE_STORIES", "APPROVE_WRITERS"],
+  EDITOR: [
+    "VIEW_ADMIN_PANEL",
+    "FEATURE_STORIES",
+    "APPROVE_WRITERS",
+    "MANAGE_CHALLENGES",
+  ],
   SUPPORT: ["VIEW_ADMIN_PANEL", "VIEW_REPORTS"],
 };
 

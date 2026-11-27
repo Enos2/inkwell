@@ -17,12 +17,15 @@ import helmet from "helmet";
 import { env } from "./config/env";
 import { healthRouter } from "./routes/health.routes";
 import { authRouter } from "./routes/auth.routes";
+import { accountRouter } from "./routes/account.routes";
 import { adminRouter } from "./routes/admin.routes";
 import { writerRouter } from "./routes/writer.routes";
 import { adminWritersRouter } from "./routes/adminWriters.routes";
 import { adminAdsRouter } from "./routes/adminAds.routes";
 import { adminModerationRouter } from "./routes/adminModeration.routes";
 import { adminPaymentsRouter } from "./routes/adminPayments.routes";
+import { adminChallengesRouter } from "./routes/adminChallenges.routes";
+import { adminDashboardRouter } from "./routes/adminDashboard.routes";
 import { adRouter } from "./routes/ad.routes";
 import { reportRouter } from "./routes/report.routes";
 import { featuredRouter } from "./routes/featured.routes";
@@ -44,9 +47,12 @@ import { walletRouter } from "./routes/wallet.routes";
 import { searchRouter, discoverRouter } from "./routes/discovery.routes";
 import { seriesRouter } from "./routes/series.routes";
 import { engagementRouter } from "./routes/engagement.routes";
+import { preferencesRouter } from "./routes/preferences.routes";
+import { challengeRouter } from "./routes/challenge.routes";
 import {
   apiLimiter,
   loginLimiter,
+  passwordResetLimiter,
   registerLimiter,
 } from "./middleware/rateLimit";
 import { liftExpiredSuspensions } from "./services/moderation.service";
@@ -82,13 +88,18 @@ app.use("/api/webhooks", webhookRouter);
 app.use("/api", apiLimiter);
 app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth/register", registerLimiter);
+app.use("/api/account/forgot-password", passwordResetLimiter);
+app.use("/api/account/reset-password", passwordResetLimiter);
 
 app.use("/api/auth", authRouter);
+app.use("/api/account", accountRouter);
 app.use("/api/writer", writerRouter);
 app.use("/api/admin/writers", adminWritersRouter);
 app.use("/api/admin/ads", adminAdsRouter);
 app.use("/api/admin/moderation", adminModerationRouter);
 app.use("/api/admin/payments", adminPaymentsRouter);
+app.use("/api/admin/challenges", adminChallengesRouter);
+app.use("/api/admin/dashboard", adminDashboardRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/ads", adRouter);
 app.use("/api/reports", reportRouter);
@@ -113,6 +124,8 @@ app.use("/api/search", searchRouter);
 app.use("/api/discover", discoverRouter);
 app.use("/api/series", seriesRouter);
 app.use("/api/engagement", engagementRouter);
+app.use("/api/preferences", preferencesRouter);
+app.use("/api/challenges", challengeRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
